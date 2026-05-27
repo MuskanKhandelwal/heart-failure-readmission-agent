@@ -1,0 +1,31 @@
+[project]
+name = "heart-failure-readmission"
+version = "0.1.0"
+description = "Heart failure 30-day readmission risk model and guideline-grounded discharge planning agent."
+readme = "README.md"
+authors = [
+    { name = "Portfolio Developer", email = "dev@example.com" }
+]
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "pydantic>=2.8,<3",
+    "pydantic-settings>=2.0,<3",
+    "python-dotenv>=1.0,<2",
+    "pytest>=8.0,<9"
+]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourname/heart-failure-readmission"
+"Source" = "https://github.com/yourname/heart-failure-readmission"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools>=65.0","wheel"]
+build-backend = "setuptools.build_meta"

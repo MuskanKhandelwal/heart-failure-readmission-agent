@@ -1,0 +1,17 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.env
+.venv/
+venv/
+.python-version
+
+# Pytest
+.pytest_cache/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/

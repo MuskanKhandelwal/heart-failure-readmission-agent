@@ -1,0 +1,39 @@
+Metadata-Version: 2.4
+Name: heart-failure-readmission
+Version: 0.1.0
+Summary: Heart failure 30-day readmission risk model and guideline-grounded discharge planning agent.
+Author-email: Portfolio Developer <dev@example.com>
+Project-URL: Homepage, https://github.com/yourname/heart-failure-readmission
+Project-URL: Source, https://github.com/yourname/heart-failure-readmission
+Classifier: Programming Language :: Python :: 3.11
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: <4.0,>=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic<3,>=2.8
+Requires-Dist: pydantic-settings<3,>=2.0
+Requires-Dist: python-dotenv<2,>=1.0
+Requires-Dist: pytest<9,>=8.0
+
+# Heart Failure Readmission Risk and Guideline-Grounded Discharge Planner
+
+Minimal portfolio scaffold for a clinical AI engineering project. This repository will combine risk modeling, RAG retrieval over heart failure guidelines, a LangGraph-based discharge planning agent, and an adversarial evaluation harness.
+
+## Project structure
+
+- `src/hf_readmit/`: application package
+- `docs/hipaa_design.md`: HIPAA-aware design notes
+- `tests/`: pytest smoke tests and component tests
+
+## Getting started
+
+1. Create a `.env` file from `.env.example`
+2. Install dependencies: `pip install -e .`
+3. Run tests: `pytest`
+
+## Notes
+
+- Uses Python 3.11
+- Uses `pydantic` for configuration and schemas
+- Uses `python-dotenv` for environment loading
+- `Langfuse` tracing and self-hosted docker deployment will be documented in `docs/hipaa_design.md`
