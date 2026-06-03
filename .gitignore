@@ -9,7 +9,7 @@ venv/
 .python-version
 
 # Data — never commit raw or processed data
-data/
+/data/
 
 # Pytest
 .pytest_cache/
