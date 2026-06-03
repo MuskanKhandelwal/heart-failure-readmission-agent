@@ -1,0 +1,16 @@
+dataset:
+  name: heart_failure_guideline_retrieval
+  source_dir: guidelines/
+  query_source: evals/rag/queries.jsonl
+metrics:
+  - precision_at_k
+  - recall_at_k
+  - mean_reciprocal_rank
+retrieval:
+  bm25:
+    max_chunk_words: 250
+    overlap_words: 50
+  chroma:
+    persist_path: chroma_db
+    collection_name: hf_guidelines
+    embedding_model: text-embedding-3-large

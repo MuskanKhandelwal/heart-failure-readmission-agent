@@ -20,6 +20,10 @@ evals/results/*.json
 # Model artifacts (generated)
 models/*.pkl
 models/*.png
+models/bm25_index.pkl
+
+# Local embedding store
+chroma_db/
 
 # Editor and OS files
 .DS_Store
@@ -29,3 +33,5 @@ models/*.png
 # MLflow
 mlruns/
 mlflow.db
+guidelines/*.pdf
+ingest_output.txt

@@ -1,0 +1,20 @@
+{"id": "q01", "query": "what is the recommended follow-up timing after heart failure discharge", "relevant_sources": ["aha_hf_guideline_2022", "ahrq_hf_readmission_toolkit"]}
+{"id": "q02", "query": "which beta blockers are recommended for HFrEF", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q03", "query": "ACE inhibitor and ARB recommendations for heart failure with reduced ejection fraction", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q04", "query": "SGLT2 inhibitor recommendations for heart failure", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q05", "query": "how should diuretics be managed at hospital discharge for heart failure", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q06", "query": "what causes preventable heart failure readmissions", "relevant_sources": ["ahrq_hf_readmission_toolkit"]}
+{"id": "q07", "query": "how to perform medication reconciliation at discharge", "relevant_sources": ["ahrq_hf_readmission_toolkit", "shm_boost_toolkit"]}
+{"id": "q08", "query": "patient education before heart failure discharge", "relevant_sources": ["ahrq_hf_readmission_toolkit", "shm_boost_toolkit"]}
+{"id": "q09", "query": "what is the BOOST model for care transitions", "relevant_sources": ["shm_boost_toolkit"]}
+{"id": "q10", "query": "post discharge telephone follow up for heart failure patients", "relevant_sources": ["shm_boost_toolkit", "ahrq_hf_readmission_toolkit"]}
+{"id": "q11", "query": "when should BNP or NT-proBNP be measured in heart failure", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q12", "query": "implantable cardioverter defibrillator indications in heart failure", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q13", "query": "cardiac rehabilitation referral for heart failure patients", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q14", "query": "sodium restriction and fluid management in heart failure", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q15", "query": "daily weight monitoring instructions for heart failure patients", "relevant_sources": ["ahrq_hf_readmission_toolkit", "shm_boost_toolkit"]}
+{"id": "q16", "query": "early outpatient visit after heart failure hospitalization", "relevant_sources": ["shm_boost_toolkit", "ahrq_hf_readmission_toolkit"]}
+{"id": "q17", "query": "mineralocorticoid receptor antagonist spironolactone heart failure", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q18", "query": "palliative care referral criteria advanced heart failure", "relevant_sources": ["aha_hf_guideline_2022"]}
+{"id": "q19", "query": "handoff communication breakdown contributing to readmission", "relevant_sources": ["ahrq_hf_readmission_toolkit"]}
+{"id": "q20", "query": "teach back method patient education heart failure self care", "relevant_sources": ["ahrq_hf_readmission_toolkit", "shm_boost_toolkit"]}
