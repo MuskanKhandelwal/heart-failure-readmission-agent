@@ -8,10 +8,24 @@ __pycache__/
 venv/
 .python-version
 
+# Data — never commit raw or processed data
+data/
+
 # Pytest
 .pytest_cache/
+
+# Eval results (generated)
+evals/results/*.json
+
+# Model artifacts (generated)
+models/*.pkl
+models/*.png
 
 # Editor and OS files
 .DS_Store
 .idea/
 .vscode/
+
+# MLflow
+mlruns/
+mlflow.db
