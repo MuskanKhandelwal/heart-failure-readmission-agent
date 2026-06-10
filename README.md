@@ -99,7 +99,7 @@ eval on the 3 seed scenarios only:
 python -c "from pathlib import Path; from hf_readmit.eval.agent_eval import run_agent_eval; run_agent_eval(Path('evals/scenarios/seed_scenarios.yaml'), Path('evals/results/seed_eval.json'))"
 ```
 
-CI (`.github/workflows/eval.yml`) runs the seed-scenario eval on push to `main`.
+CI (`.github/workflows/ci.yml`) runs the hermetic (fully mocked) test suite on push to `main`. The full agent eval above is run locally/manually, since it needs the (gitignored) model + RAG artifacts and live LLM calls.
 
 ## Known Limitations
 

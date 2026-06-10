@@ -1,0 +1,30 @@
+name: CI
+
+# Runs the hermetic (fully mocked) test suite — no secrets, no model/RAG
+# artifacts, no live LLM calls. Data-dependent tests (test_model_pipeline,
+# test_rag) are excluded because they need gitignored data/model/PDF artifacts.
+# The full adversarial agent eval is run locally/manually with
+# `python -m hf_readmit.eval.run` (it requires those artifacts + OpenAI spend).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run hermetic test suite
+        run: pytest tests/test_agent.py tests/test_api.py tests/test_eval_full.py tests/test_package.py -q
