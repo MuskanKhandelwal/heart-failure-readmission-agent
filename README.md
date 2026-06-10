@@ -1,6 +1,27 @@
 # Heart Failure Readmission Risk and Guideline-Grounded Discharge Planner
 
-Minimal portfolio scaffold for a clinical AI engineering project. This repository will combine risk modeling, RAG retrieval over heart failure guidelines, a LangGraph-based discharge planning agent, and an adversarial evaluation harness.
+> **Stack:** Python 3.11 · XGBoost · LangGraph · GPT-4o · Chroma · FastAPI · Streamlit · Langfuse
+
+## Problem
+
+Heart failure has the highest 30-day readmission rate of any condition (~20-25%) and is the primary target of CMS's Hospital Readmissions Reduction Program. Discharge planners and case managers currently identify high-risk patients manually, without consistent tooling to retrieve relevant clinical evidence or generate guideline-grounded transition plans.
+
+## What this builds
+
+This system combines a readmission risk model trained on CMS SynPUF Medicare claims with a LangGraph agent that retrieves relevant sections of the AHA/ACC 2022 Heart Failure Guideline via hybrid RAG and generates a structured discharge plan — with every intervention citing its guideline source. A 25-scenario red-team eval harness measures prompt injection robustness, drug interaction detection, citation grounding, and tool-call trajectory correctness.
+
+## Who it's for
+
+Nurses and Discharge planners coordinating heart failure patient transitions from hospital to home.
+
+
+## Dataset
+
+**Data:** CMS DE-SynPUF 2008-2010 Sample 1 (synthetic Medicare claims, no PHI). Cohort: 10,185 heart failure index admissions (ICD-9 428.x), 10.6% 30-day readmission rate. HIPAA-aware design documented in docs/hipaa_design.md — see docker/langfuse-selfhost/ for self-hosted observability configuration.
+
+## Architecture
+
+![Heart Failure Readmission Agent — System Architecture](docs/heart_readmit_arch.png)
 
 ## Project structure
 
@@ -26,10 +47,10 @@ Minimal portfolio scaffold for a clinical AI engineering project. This repositor
   AHA/ACC 2022 HF Guideline, AHRQ readmission toolkit, SHM BOOST toolkit
 - **Vector store:** Chroma (persistent), self-hosted path documented in
   docker/langfuse-selfhost/ for HIPAA-aware deployments
-- **Agent:** LangGraph (coming in Unit 5)
-- **Eval:** RAGAS + LLM-as-judge + adversarial scenarios (coming in Unit 7)
+- **Agent:** LangGraph 5-node discharge-planning graph (risk → retrieve → propose → safety-check → format)
+- **Eval:** RAGAS + LLM-as-judge + 25-scenario adversarial harness
 - **Tracing:** Langfuse Cloud (self-host config in docker/langfuse-selfhost/)
-- **Serving:** FastAPI + Streamlit (coming in Unit 6)
+- **Serving:** FastAPI (`/assess`, `/health`, `/metrics`) + Streamlit clinician/monitoring UI
 
 ## Evaluation results
 
@@ -37,12 +58,48 @@ Minimal portfolio scaffold for a clinical AI engineering project. This repositor
 |--------|-------|-------|
 | Readmission AUROC | 0.563 | Expected on synthetic SynPUF data; published range on real Medicare claims is 0.65-0.72 |
 | Readmission AUPRC | 0.131 | Base rate 10.6%; marginal lift over random |
+| Brier Score | 0.094 | Calibration error on SynPUF holdout (lower is better) |
 | Retrieval Recall@5 | 0.90 | Hybrid BM25+dense over 710 chunks from 3 guideline PDFs |
 | Retrieval Precision@5 | 0.76 | |
 | Retrieval MRR | 0.942 | Near-perfect source ranking |
-| Citation grounding rate | TBD | Measured in Unit 7 |
-| Adversarial pass rate | TBD | Measured in Unit 7 |
-| Tool-call trajectory accuracy | TBD | Measured in Unit 7 |
+| Adversarial Pass Rate | 15/25 (60%) | Safety-critical categories pass; nuanced clinical-judgment flags remain gaps — see breakdown |
+| Tool-call Trajectory Match | 96% | Behavior-aware: refuse scenarios must not act; processing scenarios require expected tools ⊆ called |
+| Citation grounding rate | TBD (requires full RAGAS run) | Per-intervention GPT-4o judge in `agent_eval` |
+
+## Adversarial Eval Breakdown (25 scenarios)
+
+| Category | Result | Notes |
+|----------|--------|-------|
+| Prompt injection | 4/4 ✅ | Input gate refuses before any tool runs |
+| Contradictory medications | 4/4 ✅ | Drug interaction flags mapped correctly |
+| Missing data | 4/4 ✅ | Missing-data flags triggered in assess_risk |
+| Hallucination bait | 2/3 ✅ | Fictional drugs/stages gated; real-drug citation not caught |
+| Out-of-guideline | 1/3 ⚠️ | Pediatric gated; rare cardiomyopathy/malignancy need specialist escalation logic |
+| Edge demographics | 0/4 ❌ | Frailty, atypical presentation flags not implemented |
+| Conflicting comorbidities | 0/3 ❌ | Volume conflict, beta-blocker caution, diuretic resistance flags not implemented |
+
+The 10 failures represent production engineering tasks beyond portfolio scope:
+clinical judgment flags for complex comorbidity interactions and demographic
+edge cases. These are documented as known gaps, not silent failures.
+
+### Running the eval suite
+
+The full Unit-7 eval (25 adversarial scenarios via the real agent + RAGAS retrieval
+metrics) can be run with:
+
+```bash
+python -m hf_readmit.eval.run
+```
+
+This makes many real LLM calls (~$0.10-0.30 for the agent eval plus RAGAS LLM-judge
+calls) and writes `evals/results/latest.json`. For a cheap smoke test, run the agent
+eval on the 3 seed scenarios only:
+
+```bash
+python -c "from pathlib import Path; from hf_readmit.eval.agent_eval import run_agent_eval; run_agent_eval(Path('evals/scenarios/seed_scenarios.yaml'), Path('evals/results/seed_eval.json'))"
+```
+
+CI (`.github/workflows/eval.yml`) runs the seed-scenario eval on push to `main`.
 
 ## Known Limitations
 

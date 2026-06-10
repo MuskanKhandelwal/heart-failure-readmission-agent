@@ -1,0 +1,44 @@
+name: Agent Eval
+
+# Runs the adversarial agent eval on the 3 SEED scenarios only. The full
+# 25-scenario suite is too slow/expensive for CI; run it locally with
+# `python -m hf_readmit.eval.run`.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  agent-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run adversarial eval (seed scenarios only)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python -c "
+          from pathlib import Path
+          from hf_readmit.eval.agent_eval import run_agent_eval
+          run_agent_eval(
+              Path('evals/scenarios/seed_scenarios.yaml'),
+              Path('evals/results/seed_eval.json'),
+          )
+          "
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seed-eval-results
+          path: evals/results/seed_eval.json

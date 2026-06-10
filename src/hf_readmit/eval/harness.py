@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
 
 from hf_readmit.eval.schemas import (
@@ -108,3 +110,43 @@ def run_eval_suite(
         results=results,
         aggregate_metrics=aggregate_metrics,
     )
+
+
+def run_full_eval_suite() -> EvalReport:
+    """Run the full Unit-7 eval suite: real agent eval (25 scenarios) + RAGAS.
+
+    Runs the adversarial agent eval over all 25 scenarios and the RAGAS retrieval
+    eval, merges the RAGAS metrics into the report's aggregate metrics, writes the
+    combined report to ``evals/results/latest.json``, and prints a summary.
+
+    WARNING: this makes many real LLM calls and is expensive (see cost notes in
+    ``agent_eval`` and ``ragas_eval``). Not exercised by the test suite.
+
+    Returns:
+        The combined :class:`EvalReport`.
+    """
+    # Lazy imports: these pull in the agent graph and RAGAS, which are heavy.
+    from hf_readmit.eval.agent_eval import run_agent_eval
+    from hf_readmit.eval.ragas_eval import run_ragas_eval
+
+    project_root = Path(__file__).resolve().parents[3]
+    scenarios_path = project_root / "evals" / "scenarios" / "adversarial_scenarios.yaml"
+    results_dir = project_root / "evals" / "results"
+    latest_path = results_dir / "latest.json"
+    ragas_path = results_dir / "ragas.json"
+
+    print("Running adversarial agent eval (25 scenarios)...")
+    report = run_agent_eval(scenarios_path, latest_path)
+
+    print("\nRunning RAGAS retrieval eval (10 questions)...")
+    ragas_scores = run_ragas_eval(ragas_path)
+    report.aggregate_metrics["ragas"] = ragas_scores
+
+    # Re-write latest.json with RAGAS metrics merged in.
+    latest_path.write_text(json.dumps(report.model_dump(), indent=2))
+
+    print("\nRAGAS metrics:")
+    for key, value in ragas_scores.items():
+        print(f"  {key}: {value}")
+    print(f"\nCombined report written to {latest_path}")
+    return report

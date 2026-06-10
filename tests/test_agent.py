@@ -129,7 +129,12 @@ class _StubTool:
 
 
 def test_low_risk_patient_skips_pipeline(monkeypatch) -> None:
-    """A low-risk patient ends after assess_risk without retrieving guidelines."""
+    """A low-risk patient with no medications ends after assess_risk.
+
+    The abbreviated-plan short-circuit applies only when risk is low AND there are
+    no medications to reconcile/check (so drug-interaction checks are never
+    skipped for medicated patients).
+    """
     # Force a low risk score regardless of model output.
     monkeypatch.setattr(
         graph_module,
@@ -157,7 +162,7 @@ def test_low_risk_patient_skips_pipeline(monkeypatch) -> None:
         "prior_ip_admits_12mo": 0,
         "inpatient_reimbursement": 2000.0,
         "sp_chf": 1,
-        "medications": ["metoprolol"],
+        "medications": [],
     }
     initial: AgentState = {
         "patient_id": "LOWRISK",
