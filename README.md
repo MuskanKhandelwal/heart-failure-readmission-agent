@@ -1,6 +1,6 @@
 # Heart Failure Readmission Risk and Guideline-Grounded Discharge Planner
 
-> **Stack:** Python 3.11 · XGBoost · LangGraph · GPT-4o · Chroma · FastAPI · Streamlit · Langfuse
+> **Stack:** Python 3.12 · XGBoost · LangGraph · GPT-4o · Chroma · FastAPI · Streamlit · Langfuse
 
 ## Problem
 
@@ -129,7 +129,7 @@ design with self-hosted Langfuse config.
 
 ## Notes
 
-- Uses Python 3.11
+- Uses Python 3.12+ (the `shap` dependency requires ≥3.12)
 - Uses `pydantic` for configuration and schemas
 - Uses `python-dotenv` for environment loading
 - `Langfuse` tracing and self-hosted docker deployment will be documented in `docs/hipaa_design.md`

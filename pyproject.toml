@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Portfolio Developer", email = "dev@example.com" }
 ]
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.12,<4.0"
 dependencies = [
     "pydantic>=2.8,<3",
     "pydantic-settings>=2.0,<3",
@@ -37,7 +37,7 @@ dependencies = [
     "pytest>=8.0,<9"
 ]
 classifiers = [
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent"
 ]
