@@ -8,7 +8,7 @@ Heart failure has the highest 30-day readmission rate of any condition (~20-25%)
 
 ## What this builds
 
-This system combines a readmission risk model trained on CMS SynPUF Medicare claims with a LangGraph agent that retrieves relevant sections of the AHA/ACC 2022 Heart Failure Guideline via hybrid RAG and generates a structured discharge plan — with every intervention citing its guideline source. A 25-scenario red-team eval harness measures prompt injection robustness, drug interaction detection, citation grounding, and tool-call trajectory correctness.
+This system combines a readmission risk model trained on CMS(Centers for Medicare and Medicaid Services) SynPUF (Medicare Claims Synthetic Public Use Files (SynPUFs)) with a LangGraph agent that retrieves relevant sections of the AHA/ACC 2022 Heart Failure Guideline via hybrid RAG and generates a structured discharge plan — with every intervention citing its guideline source. A 25-scenario red-team eval harness measures prompt injection robustness, drug interaction detection, citation grounding, and tool-call trajectory correctness.
 
 ## Who it's for
 
@@ -37,20 +37,19 @@ Nurses and Discharge planners coordinating heart failure patient transitions fro
 
 ## Stack
 
-- **Data:** CMS SynPUF 2008-2010 Sample 1 (synthetic Medicare claims)
-- **Cohort:** 10,185 HF index admissions (ICD-9 428.x in any diagnosis position),
-  10.6% 30-day readmission rate
-- **Model:** XGBoost + isotonic calibration, SHAP explainability, MLflow tracking
+- **Training Data:** Medicare patient records from 2008-2010 (synthetic, no real patient info). Contains 10,185 heart failure cases.
+- **Model:** XGBoost machine learning model that predicts readmission risk, SHAP explainability, MLflow tracking
 - **PDF extraction:** pdfplumber with layout-aware extraction (Docling evaluated
   but ruled out due to CPU processing time on large PDFs — see limitations)
 - **RAG:** Hybrid BM25 + dense (text-embedding-3-large) over 710 chunks from
-  AHA/ACC 2022 HF Guideline, AHRQ readmission toolkit, SHM BOOST toolkit
+  AHA/ACC 2022 HF Guideline, AHRQ readmission toolkit, SHM BOOST toolkit(clinical guidelines)
 - **Vector store:** Chroma (persistent), self-hosted path documented in
   docker/langfuse-selfhost/ for HIPAA-aware deployments
 - **Agent:** LangGraph 5-node discharge-planning graph (risk → retrieve → propose → safety-check → format)
 - **Eval:** RAGAS + LLM-as-judge + 25-scenario adversarial harness
 - **Tracing:** Langfuse Cloud (self-host config in docker/langfuse-selfhost/)
-- **Serving:** FastAPI (`/assess`, `/health`, `/metrics`) + Streamlit clinician/monitoring UI
+- **Web API:** FastAPI backend exposing `/assess`, `/health`, `/metrics` endpoints
+- **User Interface:** Streamlit web app for clinicians to input patients and view monitoring dashboards
 
 ## Evaluation results
 
@@ -58,33 +57,33 @@ Nurses and Discharge planners coordinating heart failure patient transitions fro
 |--------|-------|-------|
 | Readmission AUROC | 0.563 | Expected on synthetic SynPUF data; published range on real Medicare claims is 0.65-0.72 |
 | Readmission AUPRC | 0.131 | Base rate 10.6%; marginal lift over random |
-| Brier Score | 0.094 | Calibration error on SynPUF holdout (lower is better) |
 | Retrieval Recall@5 | 0.90 | Hybrid BM25+dense over 710 chunks from 3 guideline PDFs |
 | Retrieval Precision@5 | 0.76 | |
 | Retrieval MRR | 0.942 | Near-perfect source ranking |
 | Adversarial Pass Rate | 15/25 (60%) | Safety-critical categories pass; nuanced clinical-judgment flags remain gaps — see breakdown |
 | Tool-call Trajectory Match | 96% | Behavior-aware: refuse scenarios must not act; processing scenarios require expected tools ⊆ called |
-| Citation grounding rate | TBD (requires full RAGAS run) | Per-intervention GPT-4o judge in `agent_eval` |
 
-## Adversarial Eval Breakdown (25 scenarios)
+---
 
-| Category | Result | Notes |
+### Adversarial Eval Breakdown (25 scenarios)
+
+| Test Category | Passed | What this means |
 |----------|--------|-------|
-| Prompt injection | 4/4 ✅ | Input gate refuses before any tool runs |
-| Contradictory medications | 4/4 ✅ | Drug interaction flags mapped correctly |
-| Missing data | 4/4 ✅ | Missing-data flags triggered in assess_risk |
-| Hallucination bait | 2/3 ✅ | Fictional drugs/stages gated; real-drug citation not caught |
-| Out-of-guideline | 1/3 ⚠️ | Pediatric gated; rare cardiomyopathy/malignancy need specialist escalation logic |
-| Edge demographics | 0/4 ❌ | Frailty, atypical presentation flags not implemented |
-| Conflicting comorbidities | 0/3 ❌ | Volume conflict, beta-blocker caution, diuretic resistance flags not implemented |
+| Prompt injection | 4/4 ✅ | System blocks harmful prompts before they reach the agent |
+| Drug safety checks | 4/4 ✅ | System detects when medications conflict with each other |
+| Incomplete information | 4/4 ✅ | System flags when required patient data is missing |
+| Made-up drug names(Hallucination) | 2/3 ✅ | System catches fake drug names in input; sometimes misses citations to real drugs |
+| Recommendations outside guidelines | 1/3 ⚠️ | System blocks some invalid cases (like patients too young); misses others (rare conditions) |
+| Unusual patient profiles | 0/4 ❌ | System doesn't handle edge cases like elderly patients with multiple health issues |
+| Multiple health conditions | 0/3 ❌ | System doesn't account for complex interactions between multiple diseases |
 
-The 10 failures represent production engineering tasks beyond portfolio scope:
-clinical judgment flags for complex comorbidity interactions and demographic
-edge cases. These are documented as known gaps, not silent failures.
+The system passes 60% of safety tests. It's strong at blocking harmful inputs and detecting drug conflicts. It struggles with complex real-world scenarios where patients have multiple overlapping health conditions or unusual profiles.
+
+---
 
 ### Running the eval suite
 
-The full Unit-7 eval (25 adversarial scenarios via the real agent + RAGAS retrieval
+The full eval (25 adversarial scenarios via the real agent and RAGAS retrieval
 metrics) can be run with:
 
 ```bash
@@ -100,6 +99,9 @@ python -c "from pathlib import Path; from hf_readmit.eval.agent_eval import run_
 ```
 
 CI (`.github/workflows/ci.yml`) runs the hermetic (fully mocked) test suite on push to `main`. The full agent eval above is run locally/manually, since it needs the (gitignored) model + RAG artifacts and live LLM calls.
+
+## Streamlit UI
+![streamlit](docs/Streamlit_UI.png)
 
 ## Known Limitations
 
