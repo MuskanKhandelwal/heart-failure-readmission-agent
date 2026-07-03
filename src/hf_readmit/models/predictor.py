@@ -108,9 +108,14 @@ class ReadmissionPredictor:
             X = X.reindex(columns=self.feature_names)
 
         proba = float(self.model.predict_proba(X)[0, 1])
-        if proba < 0.2:
+        # SynPUF predicted probabilities range 0.051-0.223 (mean 0.106)
+        # due to weak synthetic signal. Thresholds are population-relative
+        # tertiles rather than absolute clinical thresholds.
+        # On real Medicare claims (AUROC 0.65-0.72), use absolute thresholds:
+        # low <0.20, medium 0.20-0.50, high >0.50
+        if proba < 0.092:
             risk_category = "low"
-        elif proba <= 0.5:
+        elif proba <= 0.148:
             risk_category = "medium"
         else:
             risk_category = "high"

@@ -63,7 +63,13 @@ _CATEGORY_COLOR = {"low": "#2e7d32", "medium": "#f9a825", "high": "#c62828"}
 
 
 def _risk_gauge(score: float) -> go.Figure:
-    """Plotly indicator gauge on a 0-1 scale with green/yellow/red bands."""
+    """Plotly indicator gauge on a 0-1 scale with green/yellow/red bands.
+
+    Bands aligned to population-relative tertiles:
+    - Low (green): < 0.092
+    - Medium (yellow): 0.092-0.148
+    - High (red): > 0.148
+    """
     fig = go.Figure(
         go.Indicator(
             mode="gauge+number",
@@ -74,9 +80,9 @@ def _risk_gauge(score: float) -> go.Figure:
                 "axis": {"range": [0, 1]},
                 "bar": {"color": "#37474f"},
                 "steps": [
-                    {"range": [0, 0.2], "color": "#a5d6a7"},
-                    {"range": [0.2, 0.5], "color": "#fff59d"},
-                    {"range": [0.5, 1.0], "color": "#ef9a9a"},
+                    {"range": [0, 0.092], "color": "#a5d6a7"},
+                    {"range": [0.092, 0.148], "color": "#fff59d"},
+                    {"range": [0.148, 1.0], "color": "#ef9a9a"},
                 ],
             },
         )
@@ -151,52 +157,139 @@ def render() -> None:
 
     summary = result.get("discharge_summary") or {}
 
+    # Patient header bar
+    patient_age = patient_input.get('age_at_admit', '—')
+    patient_sex = 'Male' if patient_input.get('sex') == 1 else 'Female'
+    patient_los = patient_input.get('length_of_stay', '—')
+    patient_drg = patient_input.get('drg_code', '—')
+    hf_primary = 'Yes' if patient_input.get('hf_primary') else 'No'
+
+    st.markdown(f"""
+<div style='background:#1e3a5f;color:white;padding:12px 20px;
+border-radius:8px;margin-bottom:16px;display:flex;
+justify-content:space-between;align-items:center'>
+    <span style='font-size:16px;font-weight:700'>{patient_id}</span>
+    <span><b>Age:</b> {patient_age}</span>
+    <span><b>Sex:</b> {patient_sex}</span>
+    <span><b>Length of Stay:</b> {patient_los} days</span>
+    <span><b>Diagnosis Code:</b> {patient_drg}</span>
+    <span><b>Heart Failure Primary Diagnosis:</b> {hf_primary}</span>
+</div>
+""", unsafe_allow_html=True)
+
+    # Summary metrics row
+    m1, m2, m3 = st.columns(3)
+    risk_score_val = result.get("risk_score", 0.0)
+    interventions_count = len(result.get("interventions") or [])
+    drug_warning_count = len([
+        f for f in (result.get("flags") or [])
+        if f.startswith("drug_interaction:")
+    ])
+    m1.metric(
+        label="30-day Readmission Risk",
+        value=f"{risk_score_val:.1%}",
+        delta=f"{(risk_score_val - 0.106):+.1%} vs 10.6% cohort avg",
+        delta_color="inverse"
+    )
+    m2.metric(
+        label="Grounded Interventions",
+        value=interventions_count,
+        delta="citations verified" if interventions_count > 0 else "none proposed"
+    )
+    m3.metric(
+        label="Drug Warnings",
+        value=drug_warning_count,
+        delta="interactions flagged" if drug_warning_count > 0 else "none detected",
+        delta_color="off" if drug_warning_count == 0 else "inverse"
+    )
+    st.divider()
+
     # Row 1: gauge + category badge + patient summary
     c1, c2 = st.columns([1, 2])
     with c1:
-        st.plotly_chart(_risk_gauge(result.get("risk_score", 0.0)), use_container_width=True)
-        category = result.get("risk_category", "unknown")
-        color = _CATEGORY_COLOR.get(category, "#616161")
+        risk_score = result.get("risk_score", 0.0)
+        st.plotly_chart(_risk_gauge(risk_score), use_container_width=True)
+        risk_category = result.get("risk_category", "unknown")
+        color = _CATEGORY_COLOR.get(risk_category, "#616161")
         st.markdown(
             f"<div style='text-align:center'><span style='background:{color};color:white;"
             f"padding:6px 16px;border-radius:14px;font-weight:700;text-transform:uppercase'>"
-            f"{category} risk</span></div>",
+            f"{risk_category} risk</span></div>",
             unsafe_allow_html=True,
         )
+        if risk_category in ["medium", "high"]:
+            st.warning(f"⚠️ Patient in {risk_category} risk tertile — recommend full discharge planning review")
     with c2:
         st.subheader("Patient summary")
         st.write(summary.get("patient_summary", "—"))
-        st.caption(f"Nodes visited: {' → '.join(result.get('nodes_visited', []))}  "
-                   f"| {result.get('processing_time_seconds', 0):.2f}s")
+        # Agent execution timeline
+        nodes_visited = result.get('nodes_visited', [])
+        if nodes_visited:
+            node_icons = {
+                'assess_risk': '🎯',
+                'retrieve_guidelines': '📚',
+                'propose_plan': '💡',
+                'safety_check': '🛡️',
+                'format_discharge_summary': '📄'
+            }
+            timeline_parts = []
+            for node in nodes_visited:
+                icon = node_icons.get(node, '⚙️')
+                label = node.replace('_', ' ').title()
+                timeline_parts.append(f"{icon} {label}")
+            st.markdown(
+                " **→** ".join(timeline_parts),
+                help="Agent execution path for this patient"
+            )
+        st.caption(f"Processing time: {result.get('processing_time_seconds', 0):.2f}s")
 
     # Row 2: SHAP chart
     drivers = result.get("top_drivers") or []
     if drivers:
         st.plotly_chart(_shap_chart(drivers), use_container_width=True)
 
-    # Row 3: intervention cards
-    st.subheader("Proposed interventions")
+    # Row 3: intervention cards with visible citations
+    st.subheader(f"📋 Proposed Interventions ({len(result.get('interventions') or [])} grounded)")
     citations = {c.get("chunk_id"): c for c in summary.get("citations", [])}
     interventions = result.get("interventions") or []
+
     if not interventions:
-        st.write("No grounded interventions were proposed.")
-    for iv in interventions:
-        with st.expander(f"[{iv.get('evidence_level', '—')}] {iv.get('description', 'Intervention')}"):
-            st.markdown(f"**Rationale:** {iv.get('rationale', '—')}")
-            st.markdown(f"**Evidence level:** {iv.get('evidence_level', '—')}")
+        st.info("No grounded interventions were proposed for this patient.")
+    else:
+        for iv in interventions:
+            evidence = iv.get('evidence_level', '')
+            border_color = "#2e7d32" if "Class I" in evidence else (
+                "#f9a825" if "Class II" in evidence else "#616161"
+            )
             cite = citations.get(iv.get("citation_chunk_id"))
             if cite:
-                st.markdown(
-                    f"**Citation:** {cite.get('source', '—')} — {cite.get('section', '—')} "
-                    f"(`{iv.get('citation_chunk_id')}`)"
+                cite_text = (
+                    f"📎 {cite.get('source','').replace('_',' ').replace('-',' ').title()}"
+                    f" — {cite.get('section','')}"
                 )
             else:
-                st.markdown(f"**Citation:** `{iv.get('citation_chunk_id', '—')}`")
+                cite_text = f"📎 {iv.get('citation_chunk_id', 'No citation')}"
+
+            st.markdown(f"""
+        <div style='border-left:4px solid {border_color};padding:12px 16px;
+        margin-bottom:10px;background:#f8f9fa;border-radius:0 6px 6px 0'>
+            <div style='display:flex;align-items:center;gap:10px;margin-bottom:4px'>
+                <b style='font-size:15px'>{iv.get('description','Intervention')}</b>
+                <span style='background:{border_color};color:white;padding:2px 10px;
+                border-radius:10px;font-size:11px;white-space:nowrap'>{evidence}</span>
+            </div>
+            <div style='color:#555;font-size:13px;margin-bottom:6px'>
+                {iv.get('rationale','—')}
+            </div>
+            <div style='color:#1565c0;font-size:12px'>{cite_text}</div>
+        </div>
+            """, unsafe_allow_html=True)
 
     # Row 4: drug-interaction warnings
     interaction_flags = [f for f in (result.get("flags") or []) if f.startswith("drug_interaction:")]
     if interaction_flags:
-        st.subheader("⚠️ Drug interaction warnings")
+        st.subheader("⚠️ Potential Drug Interactions")
+        st.caption("Medication combinations detected that may require review or adjustment")
         for flag in interaction_flags:
             parts = flag.split(":", 2)
             severity = parts[1] if len(parts) > 1 else "unknown"
@@ -205,6 +298,7 @@ def render() -> None:
 
     # Row 5: full discharge summary
     with st.expander("Full discharge summary (JSON)"):
+        st.caption("**Flags:** Safety/clinical alerts triggered during assessment (e.g., drug_interaction:high:ACE Inhibitor + ARB, missing_data:renal_function)")
         st.json(summary)
 
     st.divider()

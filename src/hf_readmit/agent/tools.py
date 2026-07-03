@@ -40,8 +40,13 @@ HIGH_REIMBURSEMENT_THRESHOLD = 8000.0
 # These bands are tuned to the SynPUF probability distribution so the agent can
 # triage relatively. On real Medicare claims you would use absolute clinical
 # thresholds instead. See README "Risks".
-RISK_BAND_HIGH = 0.11
-RISK_BAND_MEDIUM = 0.085
+# SynPUF predicted probabilities range 0.051-0.223 (mean 0.106)
+# due to weak synthetic signal. Thresholds are population-relative
+# tertiles rather than absolute clinical thresholds.
+# On real Medicare claims (AUROC 0.65-0.72), use absolute thresholds:
+# low <0.20, medium 0.20-0.50, high >0.50
+RISK_BAND_MEDIUM = 0.092
+RISK_BAND_HIGH = 0.148
 
 # Comorbidity flag -> readable condition name.
 CONDITION_NAMES: dict[str, str] = {

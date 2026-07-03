@@ -29,11 +29,70 @@ Nurses and Discharge planners coordinating heart failure patient transitions fro
 - `docs/hipaa_design.md`: HIPAA-aware design notes
 - `tests/`: pytest smoke tests and component tests
 
-## Getting started
+## Getting Started
 
-1. Create a `.env` file from `.env.example`
-2. Install dependencies: `pip install -e .`
-3. Run tests: `pytest`
+### Prerequisites
+- Python 3.12+
+- Git
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/MuskanKhandelwal/heart-failure-readmission-agent.git
+cd heart-failure-readmission-agent
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your API keys (OpenAI key optional for offline mode)
+```
+
+### Running the Application
+
+**Streamlit UI** (interactive clinician view):
+```bash
+source .venv/bin/activate
+streamlit run src/hf_readmit/ui/app.py
+```
+Opens http://localhost:8501 in your browser. Select TEST001 or TEST002 to see the agent in action.
+
+**FastAPI Server** (for production / integration):
+```bash
+source .venv/bin/activate
+python -m hf_readmit.api.run
+```
+Server runs on http://localhost:8000. Test the `/assess` endpoint with curl or Postman.
+
+**Agent CLI** (single patient assessment):
+```bash
+source .venv/bin/activate
+python -m hf_readmit.agent.run --patient-id TEST001
+```
+
+### Testing & Validation
+
+**Unit tests** (fast, ~1 sec):
+```bash
+pytest -q
+```
+
+**Smoke test** (3 quick scenarios, ~30 sec):
+```bash
+python -m hf_readmit.eval.run --scenarios evals/scenarios/seed_scenarios.yaml
+```
+
+**Full eval** (all 25 scenarios, ~5 min, costs ~$0.10–0.30):
+```bash
+python -m hf_readmit.eval.run
+# Results saved to evals/results/latest.json
+```
 
 ## Stack
 
@@ -50,6 +109,61 @@ Nurses and Discharge planners coordinating heart failure patient transitions fro
 - **Tracing:** Langfuse Cloud (self-host config in docker/langfuse-selfhost/)
 - **Web API:** FastAPI backend exposing `/assess`, `/health`, `/metrics` endpoints
 - **User Interface:** Streamlit web app for clinicians to input patients and view monitoring dashboards
+
+## Guardrails & Safety
+
+The agent implements seven defensive layers to catch unsafe inputs and flag clinical concerns before they reach downstream tools. Each guardrail runs deterministically (no LLM required) and accumulates diagnostic flags for observability.
+
+### Input Safety Gate (Node 1: `assess_risk`)
+Runs **before any tool call**. Detects and refuses:
+- **Prompt injection** — blocks patterns like "ignore previous instructions", "system:", JSON overrides
+- **Pediatric patients** — refuses age < 18 (adult HF guideline scope only)
+- **Fake HF stages** — rejects invalid stages (valid: A-D only); blocks numbers/roman numerals
+- **Unrecognized drugs** — flags fictional medications (e.g. "cardiofilin") against a curated ~70-drug allowlist
+
+If any gate rule triggers, the agent halts immediately with a refusal summary and **zero tool calls**.
+
+### Missing Data Flags (Node 1)
+Diagnostic flags for incomplete patient input:
+- `incomplete_medication_data` — no medications provided
+- `incomplete_admission_history` — no prior admits recorded (for patients >50yo)
+- `incomplete_comorbidity_data` — no comorbidity flags set
+- `missing_demographics` — age absent or null
+
+Flagged but non-blocking; full pipeline continues with abbreviated confidence.
+
+### Out-of-Guideline Detection (Node 2: `retrieve_guidelines`)
+Detects rare conditions not covered by the guideline corpus:
+- Sarcoidosis, malignancy, cirrhosis, congenital disease, amyloid
+- Triggers `out_of_guideline_scope` flag; processing continues with caution flag
+
+### Drug Interaction Detection (Node 4: `safety_check`)
+Hardcoded checks for five HF-critical drug pairs:
+- ACE-I + ARB/K-sparing diuretic → `hyperkalemia_risk`
+- Beta-blocker + non-DHP CCB → `bradycardia_risk`
+- Digoxin + Amiodarone → `digoxin_toxicity_risk`
+- NSAID + Loop diuretic → `nsaid_diuretic_interaction`, `renal_risk`
+
+Each interaction maps to specific clinical consequence flags for risk stratification.
+
+### Citation Grounding Verification (Node 4: `safety_check`)
+Ensures interventions cite relevant guideline excerpts:
+- Checks if proposed intervention keywords appear in cited chunk
+- Splits into **grounded** (keep) and **ungrounded** (retry) interventions
+- Retry loop: propose_plan attempts revision up to 2 times, avoiding previously failed chunks
+- After max retries, drops ungrounded interventions
+
+### Low-Risk Short-Circuit (Node 1)
+Optimization: low-risk patients with **no medications** receive abbreviated plan and exit early (skipping retrieval/proposal). Patients with medications always run the full pipeline so drug checks are never skipped.
+
+### Deterministic Offline Fallback
+Every LLM-backed node (propose, safety, format) has a deterministic offline fallback:
+- If LLM call fails or `OPENAI_API_KEY` is absent, system uses rule-based matching instead
+- Catalog-to-chunk keyword matching replaces LLM proposals
+- Ensures agent runs identically offline
+
+### Flag Accumulation
+Flags flow through the entire state and accumulate across nodes. Final discharge summary includes all flags for clinician review and audit trail.
 
 ## Evaluation results
 

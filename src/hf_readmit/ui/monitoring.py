@@ -22,8 +22,6 @@ LATEST_EVAL_PATH = PROJECT_ROOT / "evals" / "results" / "latest.json"
 MODEL_METRICS = [
     {"metric": "AUROC", "value": 0.563},
     {"metric": "AUPRC", "value": 0.131},
-    {"metric": "Brier score", "value": 0.094},
-    {"metric": "Positive label rate", "value": 0.106},
 ]
 RAG_METRICS = [
     {"metric": "Recall@5", "value": 0.90},
