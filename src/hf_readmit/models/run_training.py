@@ -15,10 +15,18 @@ logger = setup_logging()
 
 def main() -> None:
     project_root = Path(__file__).resolve().parents[3]
-    inpatient_path = project_root / "data" / "raw" / "DE1_0_2008_to_2010_Inpatient_Claims_Sample_1.csv"
-    beneficiary_path = project_root / "data" / "raw" / "DE1_0_2009_Beneficiary_Summary_File_Sample_1.csv"
+    raw_dir = project_root / "data" / "raw"
+    inpatient_path = raw_dir / "DE1_0_2008_to_2010_Inpatient_Claims_Sample_1.csv"
+    beneficiary_paths = [
+        raw_dir / "DE1_0_2008_Beneficiary_Summary_File_Sample_1.csv",
+        raw_dir / "DE1_0_2009_Beneficiary_Summary_File_Sample_1.csv",
+        raw_dir / "DE1_0_2010_Beneficiary_Summary_File_Sample_1.csv",
+    ]
+    # Use whichever yearly snapshots are present so training still runs if some
+    # beneficiary files are missing.
+    beneficiary_paths = [path for path in beneficiary_paths if path.exists()]
 
-    cohort = build_hf_cohort(inpatient_path, beneficiary_path)
+    cohort = build_hf_cohort(inpatient_path, beneficiary_paths)
     X, y, feature_names = build_features(cohort)
 
     experiment_name = "hf_readmit_training"

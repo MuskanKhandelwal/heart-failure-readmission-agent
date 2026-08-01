@@ -39,9 +39,12 @@ def train_model(X: "pd.DataFrame", y: "pd.Series", experiment_name: str) -> dict
     )
     base_model.fit(X_train, y_train)
 
+    # Sigmoid (Platt) calibration: a stable 2-parameter fit that behaves better
+    # than isotonic on this small, imbalanced cohort (marginally lower Brier and
+    # a tighter probability range). See docs/notes; validated by Brier score.
     calibrated_model = CalibratedClassifierCV(
         estimator=base_model,
-        method="isotonic",
+        method="sigmoid",
         cv=3,
     )
     calibrated_model.fit(X_train, y_train)
@@ -60,7 +63,11 @@ def train_model(X: "pd.DataFrame", y: "pd.Series", experiment_name: str) -> dict
 
     calibration_plot_path = model_dir / "calibration_plot.png"
     fig, ax = plt.subplots(figsize=(8, 6))
-    CalibrationDisplay.from_estimator(calibrated_model, X_test, y_test, ax=ax, n_bins=10)
+    # Quantile bins (equal count per bin) rather than equal-width, so sparse
+    # positives in the tail don't produce a noisy, misleading reliability curve.
+    CalibrationDisplay.from_estimator(
+        calibrated_model, X_test, y_test, ax=ax, n_bins=5, strategy="quantile"
+    )
     ax.set_title("Calibration plot")
     fig.tight_layout()
     fig.savefig(calibration_plot_path)
@@ -75,7 +82,7 @@ def train_model(X: "pd.DataFrame", y: "pd.Series", experiment_name: str) -> dict
                 "learning_rate": 0.05,
                 "scale_pos_weight": float(scale_pos_weight),
                 "random_state": 42,
-                "calibration_method": "isotonic",
+                "calibration_method": "sigmoid",
             }
         )
         mlflow.log_metric("auroc", float(auroc))

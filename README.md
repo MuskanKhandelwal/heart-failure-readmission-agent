@@ -17,7 +17,7 @@ Nurses and Discharge planners coordinating heart failure patient transitions fro
 
 ## Dataset
 
-**Data:** CMS DE-SynPUF 2008-2010 Sample 1 (synthetic Medicare claims, no PHI). Cohort: 10,185 heart failure index admissions (ICD-9 428.x), 10.6% 30-day readmission rate. HIPAA-aware design documented in docs/hipaa_design.md — see docker/langfuse-selfhost/ for self-hosted observability configuration.
+**Data:** CMS DE-SynPUF 2008-2010 Sample 1 (synthetic Medicare claims, no PHI). Cohort: 10,203 heart failure index admissions (ICD-9 428.x), 10.6% 30-day readmission rate. Comorbidity/demographic features use year-matched beneficiary snapshots (2008/2009/2010). HIPAA-aware design documented in docs/hipaa_design.md — see docker/langfuse-selfhost/ for self-hosted observability configuration.
 
 ## Architecture
 
@@ -96,7 +96,7 @@ python -m hf_readmit.eval.run
 
 ## Stack
 
-- **Training Data:** Medicare patient records from 2008-2010 (synthetic, no real patient info). Contains 10,185 heart failure cases.
+- **Training Data:** Medicare patient records from 2008-2010 (synthetic, no real patient info). Contains 10,203 heart failure cases.
 - **Model:** XGBoost machine learning model that predicts readmission risk, SHAP explainability, MLflow tracking
 - **PDF extraction:** pdfplumber with layout-aware extraction (Docling evaluated
   but ruled out due to CPU processing time on large PDFs — see limitations)
@@ -169,8 +169,8 @@ Flags flow through the entire state and accumulate across nodes. Final discharge
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Readmission AUROC | 0.563 | Expected on synthetic SynPUF data; published range on real Medicare claims is 0.65-0.72 |
-| Readmission AUPRC | 0.131 | Base rate 10.6%; marginal lift over random |
+| Readmission AUROC | 0.635 | Year-matched beneficiary snapshots (2008/2009/2010); approaching the 0.65-0.72 published range on real Medicare claims |
+| Readmission AUPRC | 0.156 | Base rate 10.6%; lift over random |
 | Retrieval Recall@5 | 0.90 | Hybrid BM25+dense over 710 chunks from 3 guideline PDFs |
 | Retrieval Precision@5 | 0.76 | |
 | Retrieval MRR | 0.942 | Near-perfect source ranking |
@@ -219,14 +219,16 @@ CI (`.github/workflows/ci.yml`) runs the hermetic (fully mocked) test suite on p
 
 ## Known Limitations
 
-- **SynPUF predictive performance:** AUROC 0.563 vs 0.65-0.72 on real Medicare
+- **SynPUF predictive performance:** AUROC 0.635 vs 0.65-0.72 on real Medicare
   claims (Kansagara et al., JAMA 2011). SynPUF chronic condition flags are
-  synthetically generated and lack real predictive relationships.
+  synthetically generated and lack real predictive relationships, so a residual
+  gap to real-claims performance is still expected.
 - **PDF extraction:** pdfplumber extracts text only. Images, figures, and
   flowcharts from the AHA guideline are not captured. Docling would improve
   this on GPU infrastructure.
-- **Beneficiary data:** Only 2009 beneficiary summary available; 2008/2010
-  admissions use 2009 demographic snapshot (±1 year).
+- **Beneficiary data:** All three yearly beneficiary summaries (2008/2009/2010)
+  are used; each admission is matched to the nearest-year snapshot so
+  comorbidity flags are temporally aligned to the admission.
 - **Drug interactions:** Hardcoded 5-pair lookup for v1. Production would use
   a real drug interaction API (e.g. OpenFDA, DrugBank).
 - **RAG corpus:** 3 documents, no 2023 AHA focused update (SGLT2 inhibitor

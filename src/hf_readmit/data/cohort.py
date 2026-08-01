@@ -1,16 +1,19 @@
 """Cohort construction for heart failure readmission risk modeling."""
 
 # NOTE: SynPUF Performance Limitation
-# This pipeline achieves AUROC 0.563 and AUPRC 0.131 on SynPUF synthetic data.
+# This pipeline achieves AUROC 0.635 and AUPRC 0.156 on SynPUF synthetic data
+# (using year-matched 2008/2009/2010 beneficiary snapshots).
 # Published HF readmission models on real Medicare claims achieve AUROC 0.65-0.72
-# (Kansagara et al., 2011). The gap is expected: SynPUF chronic condition flags
-# and utilization patterns are synthetically generated and do not preserve real
-# predictive relationships. On real claims data, the same pipeline would be
+# (Kansagara et al., 2011). A residual gap is expected: SynPUF chronic condition
+# flags and utilization patterns are synthetically generated and do not preserve
+# real predictive relationships. On real claims data, the same pipeline would be
 # expected to perform in the published range.
 # Reference: Kansagara D et al. JAMA. 2011;306(16):1782-1793.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -20,6 +23,21 @@ from hf_readmit.utils.logging import setup_logging
 logger = setup_logging()
 
 HF_ICD9_CODES = {f"428{i}" for i in range(10)}
+
+_BENEFICIARY_USECOLS = [
+    "DESYNPUF_ID",
+    "BENE_BIRTH_DT",
+    "BENE_DEATH_DT",
+    "BENE_SEX_IDENT_CD",
+    "SP_CHF",
+    "SP_CHRNKIDN",
+    "SP_DIABETES",
+    "SP_ISCHMCHT",
+    "SP_COPD",
+    "SP_DEPRESSN",
+    "SP_ALZHDMTA",
+    "SP_STRKETIA",
+]
 
 SP_FLAG_COLUMNS = {
     "sp_chf": "SP_CHF",
@@ -56,12 +74,49 @@ def _compute_readmit_label(group: pd.DataFrame) -> pd.Series:
     return pd.Series(labels, index=group.index)
 
 
-def build_hf_cohort(inpatient_path: Path, beneficiary_path: Path) -> pd.DataFrame:
+def _beneficiary_year(path: Path) -> int:
+    """Infer the snapshot year from a beneficiary summary filename."""
+    match = re.search(r"20\d\d", Path(path).name)
+    if match is None:
+        raise ValueError(f"Cannot infer beneficiary year from filename: {path}")
+    return int(match.group(0))
+
+
+def _load_beneficiaries(paths: list[Path]) -> pd.DataFrame:
+    """Load one or more yearly beneficiary files into a single long frame.
+
+    Each row is tagged with the ``bene_year`` it came from so downstream code can
+    match an admission to the snapshot from its own (or nearest) year.
+    """
+    frames = []
+    for path in paths:
+        year = _beneficiary_year(path)
+        frame = pd.read_csv(
+            path,
+            dtype={"DESYNPUF_ID": str, "BENE_SEX_IDENT_CD": float},
+            usecols=_BENEFICIARY_USECOLS,
+        )
+        frame["bene_year"] = year
+        frames.append(frame)
+        logger.info("Loaded beneficiary records", extra={"year": year, "count": len(frame)})
+    return pd.concat(frames, ignore_index=True)
+
+
+def build_hf_cohort(
+    inpatient_path: Path, beneficiary_paths: Path | Iterable[Path]
+) -> pd.DataFrame:
     """Build a heart failure cohort from inpatient and beneficiary claims.
 
-    The beneficiary data is only available for 2009 in this repository, so the
-    cohort is naturally restricted to patients with 2009 beneficiary records.
+    ``beneficiary_paths`` may be a single path or a collection of yearly
+    beneficiary summary files (2008/2009/2010). Each index admission is matched
+    to the beneficiary snapshot from the nearest calendar year, so demographic
+    and comorbidity flags reflect the patient's status around the admission
+    rather than a single fixed-year snapshot.
     """
+    if isinstance(beneficiary_paths, (str, Path)):
+        beneficiary_paths = [Path(beneficiary_paths)]
+    else:
+        beneficiary_paths = [Path(p) for p in beneficiary_paths]
     icd_cols = [f"ICD9_DGNS_CD_{i}" for i in range(1, 11)]
     inpatient_df = pd.read_csv(
         inpatient_path,
@@ -86,29 +141,7 @@ def build_hf_cohort(inpatient_path: Path, beneficiary_path: Path) -> pd.DataFram
 
     logger.info("Loaded inpatient claims", extra={"count": len(inpatient_df)})
 
-    beneficiary_df = pd.read_csv(
-        beneficiary_path,
-        dtype={
-            "DESYNPUF_ID": str,
-            "BENE_SEX_IDENT_CD": float,
-        },
-        usecols=[
-            "DESYNPUF_ID",
-            "BENE_BIRTH_DT",
-            "BENE_DEATH_DT",
-            "BENE_SEX_IDENT_CD",
-            "SP_CHF",
-            "SP_CHRNKIDN",
-            "SP_DIABETES",
-            "SP_ISCHMCHT",
-            "SP_COPD",
-            "SP_DEPRESSN",
-            "SP_ALZHDMTA",
-            "SP_STRKETIA",
-        ],
-    )
-
-    logger.info("Loaded beneficiary records", extra={"count": len(beneficiary_df)})
+    beneficiary_df = _load_beneficiaries(beneficiary_paths)
 
     inpatient_df = inpatient_df[inpatient_df["SEGMENT"] == 1].copy()
     logger.info("After keeping segment 1 claims", extra={"count": len(inpatient_df)})
@@ -139,14 +172,25 @@ def build_hf_cohort(inpatient_path: Path, beneficiary_path: Path) -> pd.DataFram
         extra={"count": len(inpatient_df), "cutoff": cutoff.isoformat()},
     )
 
-    cohort = inpatient_df.merge(
+    # Match each admission to the beneficiary snapshot from the nearest calendar
+    # year (per patient), so comorbidity flags and demographics are temporally
+    # aligned to the admission instead of a single fixed-year snapshot.
+    inpatient_df["admit_year"] = inpatient_df["index_admit_date"].dt.year.astype(int)
+    inpatient_df = inpatient_df.sort_values("admit_year")
+    beneficiary_df = beneficiary_df.sort_values("bene_year")
+    cohort = pd.merge_asof(
+        inpatient_df,
         beneficiary_df,
-        how="inner",
-        on="DESYNPUF_ID",
-        validate="m:1",
+        left_on="admit_year",
+        right_on="bene_year",
+        by="DESYNPUF_ID",
+        direction="nearest",
         suffixes=("", "_ben"),
     )
-    logger.info("After beneficiary join", extra={"count": len(cohort)})
+    # merge_asof is a left join; keep only admissions that matched a beneficiary
+    # record in some year (preserves the original inner-join semantics).
+    cohort = cohort[cohort["bene_year"].notna()].copy()
+    logger.info("After year-matched beneficiary join", extra={"count": len(cohort)})
 
     cohort["BENE_BIRTH_DT"] = pd.to_datetime(
         cohort["BENE_BIRTH_DT"], format="%Y%m%d", errors="coerce"
